@@ -39,9 +39,9 @@ def ordoescape(input, esc=True):
         while end+1<len(input) and bracketcount>0:
             end = end + 1
             if input[end] == '(':
-                bracketcount = bracketcount + 1
+                bracketcount += 1
             elif input[end] == ')':
-                bracketcount = bracketcount - 1
+                bracketcount -= 1
         if bracketcount == 0:
             return r"%s\bigo{%s}%s" % (input[:start], input[start+2:end], ordoescape(input[end+1:], False))
     return input
@@ -72,14 +72,13 @@ def processwithcomments(caption, instream, outstream, listingslang):
     requiredcommands = ['Author', 'Description']
     includelist = []
     error = ""
-    warning = ""
     # Read lines from source file
     try:
         lines = instream.readlines()
     except:
         error = "Could not read source."
         lines = []
-    nlines = list()
+    nlines = []
     for line in lines:
         if 'exclude-line' in line:
             continue
@@ -110,7 +109,7 @@ def processwithcomments(caption, instream, outstream, listingslang):
         nsource = nsource.rstrip() + source[end:start]
         end = source.find(end_str, start2)
         if end<start:
-            error = "Invalid %s %s comments." % (source[start:start2], end_str)
+            error = f"Invalid {source[start:start2]} {end_str} comments."
             break
         comment = source[start2:end].strip()
         end += len(end_str)
@@ -129,7 +128,7 @@ def processwithcomments(caption, instream, outstream, listingslang):
             if allow_command and ind != -1 and ' ' not in cline[:ind] and cline[0].isalpha() and cline[0].isupper():
                 if command:
                     if command not in knowncommands:
-                        error = error + "Unknown command: " + command + ". "
+                        error = f"{error}Unknown command: {command}. "
                     commands[command] = value.lstrip()
                 command = cline[:ind]
                 value = cline[ind+1:].strip()
@@ -137,25 +136,30 @@ def processwithcomments(caption, instream, outstream, listingslang):
                 value = value + '\n' + cline
         if command:
             if command not in knowncommands:
-                error = error + "Unknown command: " + command + ". "
+                error = f"{error}Unknown command: {command}. "
             commands[command] = value.lstrip()
     for rcommand in sorted(set(requiredcommands) - set(commands)):
-        error = error + "Missing command: " + rcommand + ". "
+        error = f"{error}Missing command: {rcommand}. "
     if end>=0:
         nsource = nsource.rstrip() + source[end:]
     nsource = nsource.strip()
 
     if listingslang in ['C++', 'Java']:
         hash_script = 'hash'
-        p = subprocess.Popen(['sh', 'content/contest/%s.sh' % hash_script], stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding="utf-8")
+        p = subprocess.Popen(
+            ['sh', f'content/contest/{hash_script}.sh'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            encoding="utf-8",
+        )
         hsh, _ = p.communicate(nsource)
         hsh = hsh.split(None, 1)[0]
-        hsh = hsh + ', '
+        hsh = f'{hsh}, '
     else:
         hsh = ''
     # Produce output
     out = []
-    if warning:
+    if warning := "":
         out.append(r"\kactlwarning{%s: %s}" % (caption, warning))
     if error:
         out.append(r"\kactlerror{%s: %s}" % (caption, error))
@@ -173,11 +177,15 @@ def processwithcomments(caption, instream, outstream, listingslang):
             out.append(r"\leftcaption{%s}" % pathescape(", ".join(includelist)))
         if nsource:
             out.append(r"\rightcaption{%s%d lines}" % (hsh, len(nsource.split("\n"))))
-        langstr = ", language="+listingslang
-        out.append(r"\begin{lstlisting}[caption={%s}%s]" % (pathescape(caption), langstr))
-        out.append(nsource)
-        out.append(r"\end{lstlisting}")
-
+        langstr = f", language={listingslang}"
+        out.extend(
+            (
+                r"\begin{lstlisting}[caption={%s}%s]"
+                % (pathescape(caption), langstr),
+                nsource,
+                r"\end{lstlisting}",
+            )
+        )
     for line in out:
         print(line, file=outstream)
 
@@ -194,9 +202,7 @@ def processraw(caption, instream, outstream, listingslang = 'raw'):
 
 def parse_include(line):
     line = line.strip()
-    if line.startswith("#include"):
-        return line[8:].strip()
-    return None
+    return line[8:].strip() if line.startswith("#include") else None
 
 def getlang(input):
     return input.rsplit('.',1)[-1]
@@ -254,9 +260,9 @@ def main():
                 outstream = open(value, "w")
             if option in ("-i", "--input"):
                 instream = open(value)
-                if language == None:
+                if language is None:
                     language = getlang(value)
-                if caption == None:
+                if caption is None:
                     caption = getfilename(value)
             if option in ("-l", "--language"):
                 language = value
@@ -267,7 +273,7 @@ def main():
         if print_header_value is not None:
             print_header(print_header_value, outstream)
             return
-        print(" * \x1b[1m{}\x1b[0m".format(caption))
+        print(f" * \x1b[1m{caption}\x1b[0m")
         if language in ["cpp", "cc", "c", "h", "hpp"]:
             processwithcomments(caption, instream, outstream, 'C++')
         elif language in ["java", "kt"]:
@@ -285,9 +291,9 @@ def main():
         elif language == "rawpy":
             processraw(caption, instream, outstream, 'Python')
         else:
-            raise ValueError("Unknown language: " + str(language))
+            raise ValueError(f"Unknown language: {str(language)}")
     except (ValueError, getopt.GetoptError, IOError) as err:
-        print(str(err), file=sys.stderr)
+        print(err, file=sys.stderr)
         print("\t for help use --help", file=sys.stderr)
         return 2
 
